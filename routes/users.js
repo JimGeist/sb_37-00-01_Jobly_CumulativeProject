@@ -5,8 +5,8 @@
 const jsonschema = require("jsonschema");
 
 const express = require("express");
-const { ensureLoggedIn } = require("../middleware/auth");
-const { BadRequestError } = require("../expressError");
+const { ensureAdmin, ensureLoggedIn } = require("../middleware/auth");
+const { BadRequestError, UnauthorizedError } = require("../expressError");
 const User = require("../models/user");
 const { createToken } = require("../helpers/tokens");
 const userNewSchema = require("../schemas/userNew.json");
@@ -24,10 +24,10 @@ const router = express.Router();
  * This returns the newly created user and an authentication token for them:
  *  {user: { username, firstName, lastName, email, isAdmin }, token }
  *
- * Authorization required: login
+ * Authorization required: Admin
  **/
 
-router.post("/", ensureLoggedIn, async function (req, res, next) {
+router.post("/", ensureAdmin, async function (req, res, next) {
   try {
     const validator = jsonschema.validate(req.body, userNewSchema);
     if (!validator.valid) {
@@ -48,10 +48,12 @@ router.post("/", ensureLoggedIn, async function (req, res, next) {
  *
  * Returns list of all users.
  *
- * Authorization required: login
+ * Authorization required: Admin
+ *  - JWT token with username and isAdmin flag is passed in via  
+ *    'Authorization' keyword in the header.
  **/
 
-router.get("/", ensureLoggedIn, async function (req, res, next) {
+router.get("/", ensureAdmin, async function (req, res, next) {
   try {
     const users = await User.findAll();
     return res.json({ users });
@@ -65,10 +67,19 @@ router.get("/", ensureLoggedIn, async function (req, res, next) {
  *
  * Returns { username, firstName, lastName, isAdmin }
  *
- * Authorization required: login
+ * Authorization required: logged in username === :username OR 
+ *  logged in user is an admin.
+ *  - JWT token with username and isAdmin is passed in via 
+ *    'Authorization' keyword in the header.
  **/
 
 router.get("/:username", ensureLoggedIn, async function (req, res, next) {
+
+  if ((res.locals.user.username !== req.params.username) &&
+    (res.locals.user.isAdmin === false)) {
+    return next(new UnauthorizedError());
+  }
+
   try {
     const user = await User.get(req.params.username);
     return res.json({ user });
@@ -85,10 +96,19 @@ router.get("/:username", ensureLoggedIn, async function (req, res, next) {
  *
  * Returns { username, firstName, lastName, email, isAdmin }
  *
- * Authorization required: login
+ * Authorization required: logged in username === :username OR 
+ *  logged in user is an admin.
+ *  - JWT token with username and isAdmin is passed in via 
+ *    'Authorization' keyword in the header.
  **/
 
 router.patch("/:username", ensureLoggedIn, async function (req, res, next) {
+
+  if ((res.locals.user.username !== req.params.username) &&
+    (res.locals.user.isAdmin === false)) {
+    return next(new UnauthorizedError());
+  }
+
   try {
     const validator = jsonschema.validate(req.body, userUpdateSchema);
     if (!validator.valid) {
@@ -106,10 +126,17 @@ router.patch("/:username", ensureLoggedIn, async function (req, res, next) {
 
 /** DELETE /[username]  =>  { deleted: username }
  *
- * Authorization required: login
+* Authorization required: logged in username === :username OR 
+*  logged in user is an admin.
+*  - JWT token with username and isAdmin is passed in via 
+*    'Authorization' keyword in the header.
  **/
 
 router.delete("/:username", ensureLoggedIn, async function (req, res, next) {
+  if ((res.locals.user.username !== req.params.username) &&
+    (res.locals.user.isAdmin === false)) {
+    return next(new UnauthorizedError());
+  }
   try {
     await User.remove(req.params.username);
     return res.json({ deleted: req.params.username });
