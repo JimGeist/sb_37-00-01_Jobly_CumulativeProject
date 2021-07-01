@@ -96,12 +96,13 @@ function sqlForFilter(dataForFilter, table) {
       //  needs to result in dbName ILIKE "%filterVal%"
       const fields = {
         companies: {
-          nameLike: { dbName: "name", type: "string" },
+          nameLike: { dbName: "name", type: "string", comparison: "ILIKE" },
           minEmployees: { dbName: "num_employees", type: "integer", comparison: ">=" },
           maxEmployees: { dbName: "num_employees", type: "integer", comparison: "<=" }
         },
         jobs: {
-          title: { dbName: "title", type: "string" },
+          handle: { dbName: "c.handle", type: "string", comparison: "=" },
+          title: { dbName: "title", type: "string", comparison: "ILIKE" },
           minSalary: { dbName: "salary", type: "integer", comparison: ">=" },
           hasEquity: { dbName: "equity" }
         }
@@ -119,22 +120,36 @@ function sqlForFilter(dataForFilter, table) {
 
         // if (fields[table][colName] === "hasEquity") {
         if (colName === "hasEquity") {
-          // hasEquity value of true or false.
-          if (dataForFilter[colName]) {
+          // hasEquity value of "true" or "false" as a string, not as a boolean.
+          // check the first character to see if it is t or f
+          // dataForFilter[colName][0].toLowerCase() === "t"
+          if ((dataForFilter[colName][0]).toLowerCase() === "t") {
             // When hasEquity is true, filter to jobs that provide a non-zero amount of equity.
             // return because the value passed in for hasEquity is true / false and is not
             //  parameterized.
             return `${fields[table][colName]["dbName"]} > 0`;
           } else {
-            // There are no where clause values to set when when hasEquity is false
-            return `${fields[table][colName]["dbName"]} >= 0`;
+            // We need to have something returned When hasEquity = false because when the cols 
+            //  array is converted to a string via .join(' AND '), the empty cell will mess things
+            //  up. A workaround to this would be to build a string. 
+            return `((${fields[table][colName]["dbName"]} >= 0) OR (${fields[table][colName]["dbName"]} IS NULL))`;
           }
         }
 
         if (fields[table][colName]["type"] === "string") {
-          // need to build dbName ILIKE '%$1%'
-          tempClause = `${fields[table][colName]["dbName"]} ILIKE $${valuesOut.length + 1}`;
-          valuesOut.push(`%${dataForFilter[colName].trim()}%`);
+
+          // temp clause is common to both '=' and 'ILIKE'. fields.table.colName.comparison has the proper operation
+          // Build tempClause BEFORE valuesOut.push because the $x parameters will not match since x is valuesOut.length + 1.
+          tempClause = `${fields[table][colName]["dbName"]} ${fields[table][colName]["comparison"]} $${valuesOut.length + 1}`;
+
+          if (fields[table][colName]["comparison"] === "ILIKE") {
+            // need to build '%value%' for valuesOut.
+            valuesOut.push(`%${dataForFilter[colName].trim()}%`);
+          } else {
+            // need to build 'value' for valuesOut.
+            valuesOut.push(`${dataForFilter[colName].trim()}`);
+          }
+
         } else {
           // field is not a string so it must be an integer.
           if (fields[table][colName]["type"] === "integer") {
