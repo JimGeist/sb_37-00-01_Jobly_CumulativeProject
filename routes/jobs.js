@@ -38,8 +38,9 @@ router.post("/", ensureAdmin, async function (req, res, next) {
 
     const job = await Job.create(req.body);
     return res.status(201).json({ job });
+
   } catch (err) {
-    console.dir(err)
+
     // intercept the "insert or update on table "jobs" violates 
     //  foreign key constraint "jobs_company_handle_fkey"
     if (err.code === "23503") {
@@ -81,8 +82,8 @@ router.get("/", async function (req, res, next) {
       throw new BadRequestError(errs);
     }
 
-    const jobs = await Job.findAll("", req.query);
-    // const jobs = await Job.findAll();
+    const jobs = await Job.findAll("", "", req.query);
+
     return res.json({ jobs });
   } catch (err) {
     return next(err);
@@ -90,40 +91,40 @@ router.get("/", async function (req, res, next) {
 });
 
 
-/** GET /:handle  =>
- *   { jobs: { ..company data.., jobs [ { id, title, salary, equity }, ... ] }
- * 
- * Get all jobs for a specific company.
- *  
- * Can filter on:
- * - title (will find case-insensitive, partial matches)
- * - minSalary
- * - hasEquity (when true, jobs with equity > 0 only are returned, false means
- *     no filtering based on equity)
- *
- * Authorization required: none
- */
+// /** GET /:handle  =>
+//  *   { jobs: { ..company data.., jobs [ { id, title, salary, equity }, ... ] }
+//  * 
+//  * Get all jobs for a specific company.
+//  *  
+//  * Can filter on:
+//  * - title (will find case-insensitive, partial matches)
+//  * - minSalary
+//  * - hasEquity (when true, jobs with equity > 0 only are returned, false means
+//  *     no filtering based on equity)
+//  *
+//  * Authorization required: none
+//  */
 
-router.get("/:handle", async function (req, res, next) {
-  try {
+// router.get("/:handle", async function (req, res, next) {
+//   try {
 
-    // The jobFilter schema was needed because minSalary and hasEquity are 
-    //  not in the update schema. Additionally, the integer check in the 
-    //  update schema does not work since the minSalary value is a text
-    //  because it is part of the query string. 
-    const validator = jsonschema.validate(req.query, jobFilterSchema);
-    if (!validator.valid) {
-      const errs = validator.errors.map(e => e.stack);
-      throw new BadRequestError(errs);
-    }
+//     // The jobFilter schema was needed because minSalary and hasEquity are 
+//     //  not in the update schema. Additionally, the integer check in the 
+//     //  update schema does not work since the minSalary value is a text
+//     //  because it is part of the query string. 
+//     const validator = jsonschema.validate(req.query, jobFilterSchema);
+//     if (!validator.valid) {
+//       const errs = validator.errors.map(e => e.stack);
+//       throw new BadRequestError(errs);
+//     }
 
-    const jobs = await Job.findAll(req.params.handle, req.query);
-    // const jobs = await Job.findAll();
-    return res.json({ jobs });
-  } catch (err) {
-    return next(err);
-  }
-});
+//     const jobs = await Job.findAll(req.params.handle, "LEFT ", req.query);
+
+//     return res.json(jobs[0]);
+//   } catch (err) {
+//     return next(err);
+//   }
+// });
 
 
 /** GET /[id]  =>  { job }
@@ -175,7 +176,7 @@ router.patch("/:id", ensureAdmin, async function (req, res, next) {
 });
 
 
-/** DELETE /[handle]  =>  { deleted: handle }
+/** DELETE /[id]  =>  { deleted: id }
  *
  * Authorization required: Admin
  *  - JWT token with username and isAdmin flag is passed in via  

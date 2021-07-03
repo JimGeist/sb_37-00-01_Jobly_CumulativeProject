@@ -44,6 +44,36 @@ router.post("/", ensureAdmin, async function (req, res, next) {
 });
 
 
+/** POST / { username }/jobs/ { id }  => { applied: jobId }
+ *
+ * Allows the logged in user to apply for a job. An admin can apply for the job 
+ * for the user. 
+ *
+ * This returns :
+ *  {applied: { jobId }
+ *
+ * Authorization required: logged in username === :username OR 
+ *  logged in user is an admin.
+ *  - JWT token with username and isAdmin is passed in via 
+ *    'Authorization' keyword in the header.
+ **/
+
+router.post("/:username/jobs/:id", ensureLoggedIn, async function (req, res, next) {
+
+  if ((res.locals.user.username !== req.params.username) &&
+    (res.locals.user.isAdmin === false)) {
+    return next(new UnauthorizedError());
+  }
+
+  try {
+    const job = await User.applyForJob(req.params);
+    return res.status(201).json({ applied: job.job_id });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+
 /** GET / => { users: [ {username, firstName, lastName, email }, ... ] }
  *
  * Returns list of all users.

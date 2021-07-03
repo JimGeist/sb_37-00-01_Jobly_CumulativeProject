@@ -48,9 +48,14 @@ describe("sqlForPartialUpdate", function () {
 
 
 describe("sqlForFilter - companies", function () {
+
+  // NOTE - dataForFilter has values from the query STRING so all values are strings. Query string
+  //  values that are integers (minEmployees, maxEmployees) are coereced into the Integer datatype 
+  //  when saved in the values array.
+
   tableName = "companies";
   test("companies filter builder, no errors", function () {
-    const dataForFilter = { nameLike: "txt in name", minEmployees: 20, maxEmployees: 200 };
+    const dataForFilter = { nameLike: "txt in name", minEmployees: "20", maxEmployees: "200" };
     const whereClause = 'WHERE name ILIKE $1 AND num_employees >= $2 AND num_employees <= $3'
     const values = ["%txt in name%", 20, 200]
     const result = sqlForFilter(dataForFilter, "companies");
@@ -68,7 +73,7 @@ describe("sqlForFilter - companies", function () {
   });
 
   test("companies filter builder, no errors text trim and minEmployees", function () {
-    const dataForFilter = { nameLike: "     txt in name     ", minEmployees: 20 };
+    const dataForFilter = { nameLike: "     txt in name     ", minEmployees: "20" };
     const whereClause = 'WHERE name ILIKE $1 AND num_employees >= $2'
     const values = ["%txt in name%", 20]
     const result = sqlForFilter(dataForFilter, "companies");
@@ -86,7 +91,7 @@ describe("sqlForFilter - companies", function () {
   });
 
   test("companies filter builder, no errors minEmployees only", function () {
-    const dataForFilter = { minEmployees: 20 };
+    const dataForFilter = { minEmployees: "20" };
     const whereClause = 'WHERE num_employees >= $1'
     const values = [20]
     const result = sqlForFilter(dataForFilter, "companies");
@@ -95,7 +100,7 @@ describe("sqlForFilter - companies", function () {
   });
 
   test("companies filter builder, no errors maxEmployees only", function () {
-    const dataForFilter = { maxEmployees: 300 };
+    const dataForFilter = { maxEmployees: "300" };
     const whereClause = 'WHERE num_employees <= $1'
     const values = [300]
     const result = sqlForFilter(dataForFilter, "companies");
@@ -118,7 +123,7 @@ describe("sqlForFilter - companies", function () {
   });
 
   test("companies filter builder max < min, error: field max is not >= min", function () {
-    const dataForFilter = { nameLike: "txt in name", minEmployees: 20, maxEmployees: 10 };
+    const dataForFilter = { nameLike: "txt in name", minEmployees: "20", maxEmployees: "10" };
     function sqlForFilterBadMinMax() {
       sqlForFilter(dataForFilter, "companies");
     }
@@ -128,7 +133,7 @@ describe("sqlForFilter - companies", function () {
   });
 
   test("companies filter builder max = min, error: field max is not >= min", function () {
-    const dataForFilter = { nameLike: "txt in name", minEmployees: 20, maxEmployees: 20 };
+    const dataForFilter = { nameLike: "txt in name", minEmployees: "20", maxEmployees: "20" };
     function sqlForFilterBadMinMax() {
       sqlForFilter(dataForFilter, "companies");
     }
@@ -138,7 +143,7 @@ describe("sqlForFilter - companies", function () {
   });
 
   test("companies filter builder invalid field, error: filtering not possible", function () {
-    const dataForFilter = { invalidField: "txt in name", minEmployees: 20, maxEmployees: 200 };
+    const dataForFilter = { invalidField: "txt in name", minEmployees: "20", maxEmployees: "200" };
     const tableName = "companies";
     function sqlForFilterBadMinMax() {
       sqlForFilter(dataForFilter, tableName);
@@ -152,8 +157,13 @@ describe("sqlForFilter - companies", function () {
 
 
 describe("sqlForFilter - jobs", function () {
+
+  // NOTE - dataForFilter has values from the query STRING so all values are strings. Query string
+  //  values that are integers (minSalary) are coereced into the Integer datatype when saved in the 
+  //  values array.
+
   test("jobs filter builder, title and salary only no errors", function () {
-    const dataForFilter = { title: "job title", minSalary: 100000 };
+    const dataForFilter = { title: "job title", minSalary: "100000" };
     const whereClause = 'WHERE title ILIKE $1 AND salary >= $2'
     const values = ["%job title%", 100000]
     const result = sqlForFilter(dataForFilter, "jobs");
@@ -162,7 +172,7 @@ describe("sqlForFilter - jobs", function () {
   });
 
   test("jobs filter builder with different field order, no errors", function () {
-    const dataForFilter = { minSalary: 100000, title: "job title" };
+    const dataForFilter = { minSalary: "100000", title: "job title" };
     const whereClause = 'WHERE salary >= $1 AND title ILIKE $2'
     const values = [100000, "%job title%"]
     const result = sqlForFilter(dataForFilter, "jobs");
@@ -171,7 +181,7 @@ describe("sqlForFilter - jobs", function () {
   });
 
   test("jobs filter builder, all possible fields no errors", function () {
-    const dataForFilter = { title: "job title", hasEquity: true, minSalary: 100000 };
+    const dataForFilter = { title: "job title", hasEquity: "true", minSalary: "100000" };
     const whereClause = 'WHERE title ILIKE $1 AND equity > 0 AND salary >= $2'
     const values = ["%job title%", 100000]
     const result = sqlForFilter(dataForFilter, "jobs");
@@ -180,7 +190,7 @@ describe("sqlForFilter - jobs", function () {
   });
 
   test("jobs filter builder, all possible fields, different order no errors", function () {
-    const dataForFilter = { hasEquity: true, minSalary: 100000, title: "job title" };
+    const dataForFilter = { hasEquity: "true", minSalary: "100000", title: "job title" };
     const whereClause = 'WHERE equity > 0 AND salary >= $1 AND title ILIKE $2'
     const values = [100000, "%job title%"]
     const result = sqlForFilter(dataForFilter, "jobs");
@@ -189,8 +199,8 @@ describe("sqlForFilter - jobs", function () {
   });
 
   test("jobs filter builder, all possible fields, hasEquity is false, no errors", function () {
-    const dataForFilter = { hasEquity: false, minSalary: 100000, title: "job title" };
-    const whereClause = 'WHERE equity >= 0 AND salary >= $1 AND title ILIKE $2'
+    const dataForFilter = { hasEquity: "false", minSalary: "100000", title: "job title" };
+    const whereClause = 'WHERE ((equity >= 0) OR (equity IS NULL)) AND salary >= $1 AND title ILIKE $2'
     const values = [100000, "%job title%"]
     const result = sqlForFilter(dataForFilter, "jobs");
     expect(result.whereClause).toEqual(whereClause);
@@ -198,8 +208,8 @@ describe("sqlForFilter - jobs", function () {
   });
 
   test("jobs filter builder, all possible fields, hasEquity (2nd param) is false, no errors", function () {
-    const dataForFilter = { minSalary: 100000, hasEquity: false, title: "job title" };
-    const whereClause = 'WHERE salary >= $1 AND equity >= 0 AND title ILIKE $2'
+    const dataForFilter = { minSalary: "100000", hasEquity: "false", title: "job title" };
+    const whereClause = 'WHERE salary >= $1 AND ((equity >= 0) OR (equity IS NULL)) AND title ILIKE $2'
     const values = [100000, "%job title%"]
     const result = sqlForFilter(dataForFilter, "jobs");
     expect(result.whereClause).toEqual(whereClause);
@@ -207,90 +217,12 @@ describe("sqlForFilter - jobs", function () {
   });
 
   test("jobs filter builder, all possible fields, hasEquity (last param) is false, no errors", function () {
-    const dataForFilter = { minSalary: 100000, title: "job title", hasEquity: false };
-    const whereClause = 'WHERE salary >= $1 AND title ILIKE $2 AND equity >= 0'
+    const dataForFilter = { minSalary: "100000", title: "job title", hasEquity: "false" };
+    const whereClause = 'WHERE salary >= $1 AND title ILIKE $2 AND ((equity >= 0) OR (equity IS NULL))'
     const values = [100000, "%job title%"]
     const result = sqlForFilter(dataForFilter, "jobs");
     expect(result.whereClause).toEqual(whereClause);
     expect(result.values).toEqual(values);
   });
 
-  // test("jobs filter builder, no errors text trim and minEmployees", function () {
-  //   const dataForFilter = { name: "     txt in name     ", minEmployees: 20 };
-  //   const whereClause = 'WHERE name ILIKE $1 AND num_employees >= $2'
-  //   const values = ["%txt in name%", 20]
-  //   const result = sqlForFilter(dataForFilter, "jobs");
-  //   expect(result.whereClause).toEqual(whereClause);
-  //   expect(result.values).toEqual(values);
-  // });
-
-  // test("jobs filter builder, no errors company name only", function () {
-  //   const dataForFilter = { name: "txt in name" };
-  //   const whereClause = 'WHERE name ILIKE $1'
-  //   const values = ["%txt in name%"]
-  //   const result = sqlForFilter(dataForFilter, "jobs");
-  //   expect(result.whereClause).toEqual(whereClause);
-  //   expect(result.values).toEqual(values);
-  // });
-
-  // test("jobs filter builder, no errors minEmployees only", function () {
-  //   const dataForFilter = { minEmployees: 20 };
-  //   const whereClause = 'WHERE num_employees >= $1'
-  //   const values = [20]
-  //   const result = sqlForFilter(dataForFilter, "jobs");
-  //   expect(result.whereClause).toEqual(whereClause);
-  //   expect(result.values).toEqual(values);
-  // });
-
-  // test("jobs filter builder, no errors maxEmployees only", function () {
-  //   const dataForFilter = { maxEmployees: 300 };
-  //   const whereClause = 'WHERE num_employees <= $1'
-  //   const values = [300]
-  //   const result = sqlForFilter(dataForFilter, "jobs");
-  //   expect(result.whereClause).toEqual(whereClause);
-  //   expect(result.values).toEqual(values);
-  // });
-
-  // test("companies filter builder max < min, error: field max is not >= min", function () {
-  //   const dataForFilter = { name: "txt in name", minEmployees: 20, maxEmployees: 10 };
-  //   function sqlForFilterBadMinMax() {
-  //     sqlForFilter(dataForFilter, "jobs");
-  //   }
-  //   expect(sqlForFilterBadMinMax).toThrowError(new Error(
-  //     `Filter is incorrect: 'minEmployees', ${dataForFilter["minEmployees"]}, is NOT less than 'maxEmployees', ${dataForFilter["maxEmployees"]}.`)
-  //   );
-  // });
-
-  // test("companies filter builder max = min, error: field max is not >= min", function () {
-  //   const dataForFilter = { name: "txt in name", minEmployees: 20, maxEmployees: 20 };
-  //   function sqlForFilterBadMinMax() {
-  //     sqlForFilter(dataForFilter, "jobs");
-  //   }
-  //   expect(sqlForFilterBadMinMax).toThrowError(new Error(
-  //     `Filter is incorrect: 'minEmployees', ${dataForFilter["minEmployees"]}, is NOT less than 'maxEmployees', ${dataForFilter["maxEmployees"]}.`)
-  //   );
-  // });
-
-  // test("companies filter builder invalid field, error: filtering not possible", function () {
-  //   const dataForFilter = { invalidField: "txt in name", minEmployees: 20, maxEmployees: 200 };
-  //   const tableName = "jobs";
-  //   function sqlForFilterBadMinMax() {
-  //     sqlForFilter(dataForFilter, tableName);
-  //   }
-  //   expect(sqlForFilterBadMinMax).toThrowError(new Error(
-  //     `Filtering '${tableName}' by 'invalidField' is not possible.`)
-  //   );
-  // });
-
-
 });
-
-
-
-
-
-    // string trim
-// has equity
-  // field does not belong to table
-  // min is not less than max
-// field types are not checked. The validation and testing needs to occur in the route.

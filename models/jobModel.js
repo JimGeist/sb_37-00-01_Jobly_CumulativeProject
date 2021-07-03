@@ -3,6 +3,7 @@
 const db = require("../db");
 const { BadRequestError, NotFoundError } = require("../expressError");
 const { sqlForFilter, sqlForPartialUpdate } = require("../helpers/sql");
+const Company = require("./company");
 
 /** Related functions for jobs. */
 
@@ -19,7 +20,6 @@ class Job {
    * 
    **/
 
-
   static async create({ companyHandle, title, salary, equity }) {
 
     const result = await db.query(
@@ -34,6 +34,7 @@ class Job {
         , equity
       ],
     );
+
     const job = result.rows[0];
 
     // company_handle key name should be companyHandle on output. 'AS' for 
@@ -43,7 +44,7 @@ class Job {
       id: job.id,
       companyHandle: job.company_handle,
       title: job.title,
-      salary: job.salary,
+      salary: job.salary ? +job.salary : job.salary,
       equity: job.equity ? +job.equity : job.equity
     };
   }
@@ -55,7 +56,14 @@ class Job {
    * 
    * */
 
-  static async findAll(handle, filterValues) {
+  static async findAll(handle, joinType, filterValues) {
+
+    let filtersInAffect = false;
+
+    const keys = Object.keys(filterValues);
+    if (keys.length > 0) {
+      filtersInAffect = true;
+    }
 
     // when a handle exists, we have a findall for a specific company.
     if (handle) {
@@ -65,24 +73,70 @@ class Job {
 
     const filter = sqlForFilter(filterValues, "jobs");
 
-    const companyJobs = await db.query(
-      `SELECT c.handle AS "companyHandle"
+    // This is a common query. 
+    // for get jobs/ , joinType is '' because all companies with a job 
+    //  is an inner join.
+    // for bet jobs/:handle, joinType is 'LEFT ' because the company
+    //  should get returned, even when there are no jobs. 
+    let companyJobs = await db.query(
+      `SELECT c.handle
             , c.name
             , c.num_employees AS "numEmployees"
+            , c.description
+            , c.logo_url AS "logoUrl"
             , json_agg(j.*) AS jobs
-          FROM jobs AS j 
-          JOIN companies as c ON j.company_handle = c.handle
-          ${filter.whereClause} 
-          GROUP BY c.handle, c.name, c.num_employees
-          ORDER BY c.handle 
+        FROM companies AS c    
+        ${joinType}JOIN jobs AS j ON c.handle = j.company_handle
+        ${filter.whereClause} 
+        GROUP BY c.handle, c.name, c.num_employees, c.description, c.logo_url
+        ORDER BY c.handle 
       `, filter.values);
 
+    if (companyJobs.rows.length === 0) {
+      // is it 0 because the company was not found or 0 because of filters? 
+      if (filtersInAffect) {
+        // Does the company exist?
+        if (handle) {
+          companyJobs = await Company.get(handle);
+
+          // Company.get() will throw an error when the company was not found.
+          // We are still in findAll because the company WAS found, the 
+          //  filtering caused nothing to return.
+          companyJobs.jobs = [];
+          return [companyJobs];
+
+        } else {
+          // handle is "" so this is a get all jobs with filters and 
+          //  nothing came back.
+          throw new NotFoundError(`No jobs were found due to filter settings`);
+        }
+      } else {
+        // company was not found.
+        throw new NotFoundError(`No company: ${handle}`);
+      }
+
+    }
+
     // delete job.company_handle from all jobs at a company. We already have the company handle.
-    companyJobs.rows.forEach(company => {
-      company.jobs.forEach(job => {
-        delete job.company_handle;
+    // Were there jobs found?
+    if (companyJobs.rows[0].jobs[0]) {
+      // we have jobs for the company
+      companyJobs.rows.forEach(company => {
+        if (!(handle)) {
+          delete company.description;
+          delete company.logoUrl;
+        }
+        company.jobs.forEach(job => {
+          delete job.company_handle;
+        });
       });
-    });
+    } else {
+      // jobs[0] is null because there are no jobs for the company OR
+      //  filtering resulted in no jobs.
+      // pop jobs so we have [] instead of [ null ] in the output.
+      companyJobs.rows[0].jobs.pop();
+    }
+
     return companyJobs.rows;
 
   }
@@ -90,15 +144,15 @@ class Job {
 
   /** Given a job id, return details about the job.
    *
-   * Returns { ..company data.., job { id, title, salary, equity } }
-   *   where jobs is [{ id, title, salary, equity, companyHandle }, ...]
+   * Returns { ..company data.., jobs [ { job }, { job } ] }
+   *   where job is [{ id, title, salary, equity }, ...]
    *
    * Throws NotFoundError when job id is not found.
    **/
 
   static async get(id) {
     const result = await db.query(
-      `SELECT company_handle AS "companyHandle"
+      `SELECT company_handle AS "handle"
           , name
           , num_employees AS "numEmployees"
           , id
@@ -116,7 +170,7 @@ class Job {
 
     // Return numeric form of equity when it is not null.
     return {
-      companyHandle: jobDetail.companyHandle,
+      handle: jobDetail.handle,
       name: jobDetail.name,
       numEmployees: jobDetail.numEmployees,
       job: {
@@ -165,9 +219,7 @@ class Job {
 
     const job = result.rows[0];
 
-    // Not sure why RETURNING company_handle AS companyHandle ... returns
-    //  companyhandle. Due to this issue, a reconstructed 'job' object is 
-    //  returned.
+
     // Return numeric form of equity when it is not null.
     return {
       companyHandle: job.company_handle,

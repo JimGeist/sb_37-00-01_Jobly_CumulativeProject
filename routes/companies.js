@@ -8,10 +8,13 @@ const express = require("express");
 const { BadRequestError } = require("../expressError");
 const { ensureAdmin, ensureLoggedIn } = require("../middleware/auth");
 const Company = require("../models/company");
+const Job = require("../models/jobModel");
 
 const companyFilterSchema = require("../schemas/companyFilter.json");
 const companyNewSchema = require("../schemas/companyNew.json");
 const companyUpdateSchema = require("../schemas/companyUpdate.json");
+
+const jobFilterSchema = require("../schemas/jobFilter.json");
 
 const router = new express.Router();
 
@@ -73,6 +76,44 @@ router.get("/", async function (req, res, next) {
   }
 });
 
+
+// /** GET /:handle  =>
+//  *   { company: { ..company data.., jobs [ { id, title, salary, equity }, ... ] }
+//  * 
+//  * Get all jobs for a specific company.
+//  *  
+//  * Can filter on:
+//  * - title (will find case-insensitive, partial matches)
+//  * - minSalary
+//  * - hasEquity (when true, jobs with equity > 0 only are returned, false means
+//  *     no filtering based on equity)
+//  *
+//  * Authorization required: none
+//  */
+
+router.get("/:handle", async function (req, res, next) {
+  try {
+
+    // The jobFilter schema was needed because minSalary and hasEquity are 
+    //  not in the update schema. Additionally, the integer check in the 
+    //  update schema does not work since the minSalary value is a text
+    //  because it is part of the query string. 
+    const validator = jsonschema.validate(req.query, jobFilterSchema);
+    if (!validator.valid) {
+      const errs = validator.errors.map(e => e.stack);
+      throw new BadRequestError(errs);
+    }
+
+    const company = await Job.findAll(req.params.handle, "LEFT ", req.query);
+
+    return res.json({ company: company[0] });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+
+
 /** GET /[handle]  =>  { company }
  *
  *  Company is { handle, name, description, numEmployees, logoUrl, jobs }
@@ -81,6 +122,7 @@ router.get("/", async function (req, res, next) {
  *  Authorization required: none
  */
 
+/* // old working code
 router.get("/:handle", async function (req, res, next) {
   try {
     const company = await Company.get(req.params.handle);
@@ -89,6 +131,7 @@ router.get("/:handle", async function (req, res, next) {
     return next(err);
   }
 });
+*/
 
 /** PATCH /[handle] { fld1, fld2, ... } => { company }
  *
